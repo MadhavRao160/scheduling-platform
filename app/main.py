@@ -18,10 +18,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config.settings import settings
 from app.errors import ApiError
 from app.schemas.common import ErrorResponse
-from app.api.routers import health
 
 from sqlalchemy.exc import IntegrityError
-from app.api.routers import health, users
+from app.api.routers import event_types, health, users
 
 logger = logging.getLogger(__name__)
 # PostgreSQL's error code for a unique-constraint violation.
@@ -114,6 +113,7 @@ def create_app() -> FastAPI:
     _register_exception_handlers(app)
     app.include_router(health.router)
     app.include_router(users.router)
+    app.include_router(event_types.router)
 
     return app
 
