@@ -88,3 +88,8 @@ UtcDatetime = Annotated[datetime, PlainSerializer(_format_utc, return_type=str)]
 
 Slug = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")]
 """A URL-safe identifier: lower-case letters, digits and hyphens, 1–100 long."""
+
+HHMM = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")]
+"""A 24-hour wall-clock time, exactly 'HH:mm' — '09:00', '17:30'.
+Because the format is fixed-width, two values compare correctly as plain
+text: '09:00' < '17:00'."""
