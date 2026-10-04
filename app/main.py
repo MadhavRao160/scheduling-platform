@@ -20,7 +20,12 @@ from app.errors import ApiError
 from app.schemas.common import ErrorResponse
 from app.api.routers import health
 
+from sqlalchemy.exc import IntegrityError
+from app.api.routers import health, users
+
 logger = logging.getLogger(__name__)
+# PostgreSQL's error code for a unique-constraint violation.
+_UNIQUE_VIOLATION = "23505"
 
 
 def _error_response(
@@ -81,8 +86,23 @@ def _register_exception_handlers(app: FastAPI) -> None:
         """Anything unanticipated. The traceback is always logged; it reaches
         the client only in development."""
         logger.exception("Unhandled error", exc_info=exc)
-        details = traceback.format_exc().splitlines() if settings.is_development else None
+        details = (
+            "".join(traceback.format_exception(exc)).splitlines()
+            if settings.is_development
+            else None
+        )
         return _error_response(500, "Internal server error", details=details)
+
+    @app.exception_handler(IntegrityError)
+    async def handle_integrity_error(request: Request, exc: IntegrityError) -> JSONResponse:
+        """Safety net for a race the service's checks cannot close: two
+        requests both find a value free, and the database rejects the second.
+        That is a conflict (409), not a server fault. Any other integrity
+        failure is unexpected and is treated as one."""
+        if getattr(exc.orig, "sqlstate", None) == _UNIQUE_VIOLATION:
+            logger.warning("Unique constraint violated: %s", exc.orig)
+            return _error_response(409, "Conflicts with existing data")
+        return await handle_unexpected_error(request, exc)
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -93,6 +113,7 @@ def create_app() -> FastAPI:
 
     _register_exception_handlers(app)
     app.include_router(health.router)
+    app.include_router(users.router)
 
     return app
 
