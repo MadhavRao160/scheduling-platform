@@ -35,6 +35,22 @@ def _error_response(
         content=body.model_dump(by_alias=True, exclude_none=True),
     )
 
+def _format_validation_errors(errors) -> list[dict[str, str]]:
+    """Reduce Pydantic's error list to plain field/message pairs.
+
+    The raw list can hold Python exception objects, which are not JSON
+    serialisable, and its location tuples lead with an internal 'body' marker.
+    """
+    formatted = []
+    for error in errors:
+        location = [str(part) for part in error.get("loc", ()) if part != "body"]
+        formatted.append(
+            {
+                "field": ".".join(location) or "body",
+                "message": error.get("msg", "Invalid value"),
+            }
+        )
+    return formatted
 
 def _register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
@@ -49,7 +65,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         """Pydantic rejected the request before the handler ran. FastAPI would
         return 422 with its own shape; the contract says 400 with ours."""
-        return _error_response(400, "Validation failed", details=exc.errors())
+        return _error_response(400, "Validation failed", details=_format_validation_errors(exc.errors()))
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_exception(
@@ -67,7 +83,6 @@ def _register_exception_handlers(app: FastAPI) -> None:
         logger.exception("Unhandled error", exc_info=exc)
         details = traceback.format_exc().splitlines() if settings.is_development else None
         return _error_response(500, "Internal server error", details=details)
-
 
 def create_app() -> FastAPI:
     app = FastAPI(

@@ -5,8 +5,12 @@ envelope the exception handlers emit, and the base class that gives every
 schema in the project its camelCase JSON surface.
 """
 
-from typing import Any, Generic, TypeVar
-from pydantic import BaseModel, ConfigDict
+from functools import lru_cache
+from typing import Annotated, Any, Generic, TypeVar
+from zoneinfo import available_timezones
+from datetime import datetime
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, PlainSerializer
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
@@ -51,3 +55,33 @@ class ErrorResponse(CamelModel):
     success: bool = False
     message: str
     details: list[Any] | None = None
+
+@lru_cache
+def _known_timezones() -> frozenset[str]:
+    """Every IANA zone name zoneinfo can resolve. Computed once — it scans
+    the timezone database, so it should not run on every request."""
+    return frozenset(available_timezones())
+
+
+def _validate_timezone(value: str) -> str:
+    if value not in _known_timezones():
+        raise ValueError(f"'{value}' is not a valid IANA timezone, e.g. 'Asia/Kolkata'")
+    return value
+
+
+TimezoneStr = Annotated[str, AfterValidator(_validate_timezone)]
+"""A string that must be a real IANA timezone name.
+
+Validated at the schema boundary because an unresolvable zone stored in the
+database only fails much later, when something tries to turn local times into
+real instants — far from where the bad value came in."""
+
+def _format_utc(value: datetime) -> str:
+    """Render a stored timestamp as ISO 8601, millisecond precision, with Z.
+    Stored timestamps carry no zone; they are UTC by convention, so Z is
+    correct to append."""
+    return value.strftime("%Y-%m-%dT%H:%M:%S.") + f"{value.microsecond // 1000:03d}Z"
+
+
+UtcDatetime = Annotated[datetime, PlainSerializer(_format_utc, return_type=str)]
+"""A datetime that serialises as '2026-08-10T09:00:00.000Z'."""
