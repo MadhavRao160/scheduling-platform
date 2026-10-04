@@ -8,9 +8,8 @@ them; they are stored and validated now because later scheduling depends on them
 """
 
 from sqlalchemy import Boolean, ForeignKey, Integer, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
-
 from app.models.base import Base, TimestampMixin
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class EventType(Base, TimestampMixin):
@@ -50,3 +49,4 @@ class EventType(Base, TimestampMixin):
     buffer_after_minutes: Mapped[int] = mapped_column(
         "bufferAfterMinutes", Integer, nullable=False, server_default="0"
     )
+    host: Mapped["User"] = relationship(lazy="raise")

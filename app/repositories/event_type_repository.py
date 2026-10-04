@@ -11,6 +11,7 @@ from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event_type import EventType
+from sqlalchemy.orm import joinedload
 
 
 async def list_by_host(session: AsyncSession, host_id: int) -> Sequence[EventType]:
@@ -67,3 +68,21 @@ async def add(session: AsyncSession, event_type: EventType) -> EventType:
 async def delete(session: AsyncSession, event_type: EventType) -> None:
     await session.delete(event_type)
     await session.flush()
+
+async def get_active_with_host(
+    session: AsyncSession, host_id: int, slug: str
+) -> EventType | None:
+    """An active event type with its host, loaded in a single query.
+
+    Missing, inactive and host-less all come back as None — the query simply
+    finds nothing — so callers cannot tell them apart.
+    """
+    return await session.scalar(
+        select(EventType)
+        .options(joinedload(EventType.host, innerjoin=True))
+        .where(
+            EventType.host_id == host_id,
+            EventType.slug == slug,
+            EventType.is_active.is_(True),
+        )
+    )

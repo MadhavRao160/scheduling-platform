@@ -11,6 +11,9 @@ from app.repositories import event_type_repository, user_repository
 from app.schemas.event_type import (
     CreateEventTypeRequest,
     EventTypeResponse,
+    PublicEventTypeResponse,
+    PublicEventTypeSummary,
+    PublicHost,
     UpdateEventTypeRequest,
 )
 from app.utils.slug import slugify
@@ -95,3 +98,17 @@ async def delete_event_type(
     event_type = await _load_or_404(session, host_id, event_type_id)
     await event_type_repository.delete(session, event_type)
     await session.commit()
+
+async def get_public_event_type(
+    session: AsyncSession, host_id: int, slug: str
+) -> PublicEventTypeResponse:
+    """The invitee-facing view. One message for every kind of absence, so the
+    endpoint cannot be used to find out which hosts or drafts exist."""
+    event_type = await event_type_repository.get_active_with_host(session, host_id, slug)
+    if event_type is None:
+        raise not_found("Event type")
+
+    return PublicEventTypeResponse(
+        event_type=PublicEventTypeSummary.model_validate(event_type),
+        host=PublicHost.model_validate(event_type.host),
+    )

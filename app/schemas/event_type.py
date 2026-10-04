@@ -78,3 +78,26 @@ class EventTypeResponse(CamelModel):
     buffer_after_minutes: int
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+# ---------------------------------------------------------------- Public view
+
+
+class PublicEventTypeSummary(CamelModel):
+    """The five event-type fields an invitee may see. Buffers, isActive,
+    locationValue and timestamps are deliberately left out."""
+
+    id: int
+    title: str
+    description: str | None
+    duration_minutes: int
+    location_type: LocationType
+
+
+class PublicHost(CamelModel):
+    name: str
+    email: str
+
+
+class PublicEventTypeResponse(CamelModel):
+    event_type: PublicEventTypeSummary
+    host: PublicHost
