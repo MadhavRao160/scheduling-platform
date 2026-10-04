@@ -5,13 +5,9 @@ service runs, the input is already well-formed.
 
 from typing import Annotated
 from pydantic import EmailStr, Field, model_validator
-from app.schemas.common import CamelModel, TimezoneStr, UtcDatetime
+from app.schemas.common import CamelModel, Slug, TimezoneStr, UtcDatetime
 
 Name = Annotated[str, Field(min_length=1, max_length=100)]
-# The spec states 1–100 characters. The character pattern is a deliberate
-# tightening: a slug appears in URLs, so it is held to the same URL-safe
-# alphabet the spec requires for event-type slugs.
-Slug = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")]
 
 class CreateUserRequest(CamelModel):
     """Body of POST /api/users."""

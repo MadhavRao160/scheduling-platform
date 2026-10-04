@@ -10,7 +10,7 @@ from typing import Annotated, Any, Generic, TypeVar
 from zoneinfo import available_timezones
 from datetime import datetime
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, PlainSerializer
+from pydantic import AfterValidator, BaseModel, ConfigDict, PlainSerializer, Field
 from pydantic.alias_generators import to_camel
 
 T = TypeVar("T")
@@ -85,3 +85,6 @@ def _format_utc(value: datetime) -> str:
 
 UtcDatetime = Annotated[datetime, PlainSerializer(_format_utc, return_type=str)]
 """A datetime that serialises as '2026-08-10T09:00:00.000Z'."""
+
+Slug = Annotated[str, Field(min_length=1, max_length=100, pattern=r"^[a-z0-9-]+$")]
+"""A URL-safe identifier: lower-case letters, digits and hyphens, 1–100 long."""
