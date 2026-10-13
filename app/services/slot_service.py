@@ -1,7 +1,9 @@
-"""Slot regeneration: the I/O around the pure slot_generation module (Section 8.3).
+"""Slot I/O around the pure slot_generation module.
 
-Runs inside the Temporal worker, not inside an HTTP request, so it opens its
-own sessions from session_factory instead of using get_session.
+- regenerate_host_slots (Section 8.3) runs inside the Temporal worker, not an
+  HTTP request, so it opens its own sessions from session_factory.
+- list_public_slots (Section 8.5) serves the public endpoint and uses the
+  request's session. Read-only: no commit.
 """
 
 import asyncio
@@ -11,9 +13,13 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, time, timedelta
 from typing import Any, TypeVar
+from zoneinfo import ZoneInfo
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.database import session_factory
+from app.errors import not_found
 from app.models.slot import new_slot_id
 from app.repositories import (
     availability_exception_repository,
@@ -22,6 +28,7 @@ from app.repositories import (
     slot_repository,
     user_repository,
 )
+from app.schemas.slot import SlotDay, SlotListQuery, SlotListResponse, SlotOut
 from app.services import slot_generation as sg
 from app.utils.utc import from_db, to_db
 
@@ -158,3 +165,46 @@ async def regenerate_host_slots(
     async with session_factory() as session:
         await slot_repository.block_available_for_inactive_event_types(session, host_id, to_db(now))
         await session.commit()
+
+
+# ------------------------------------------------------------ public listing
+
+
+async def list_public_slots(
+    session: AsyncSession,
+    user_id: int,
+    slug: str,
+    query: SlotListQuery,
+    *,
+    now: datetime | None = None,
+) -> SlotListResponse:
+    """Bookable slots for a public event type, grouped by the viewer's local date.
+
+    `from`/`to` are local dates in the requested zone, so the UTC range is
+    [local midnight of `from`, local midnight after `to`). Timestamps in the
+    response stay UTC; only the grouping key is local.
+    """
+    event_type = await event_type_repository.get_active_with_host(session, user_id, slug)
+    if event_type is None:
+        raise not_found("Event type")
+
+    tz_name = query.timezone or event_type.host.timezone
+    tz = ZoneInfo(tz_name)
+    range_start = datetime.combine(query.from_, time.min, tzinfo=tz)
+    range_end = datetime.combine(query.to + timedelta(days=1), time.min, tzinfo=tz)
+    now = now or datetime.now(UTC)
+
+    slots = await slot_repository.find_available_for_event_type(
+        session, event_type.id, to_db(range_start), to_db(range_end), to_db(now)
+    )
+
+    # Rows arrive sorted by start time, so days and slots stay in order.
+    days: dict[dt.date, list[SlotOut]] = {}
+    for slot in slots:
+        local_day = from_db(slot.start_at).astimezone(tz).date()
+        days.setdefault(local_day, []).append(SlotOut.model_validate(slot))
+
+    return SlotListResponse(
+        timezone=tz_name,
+        days=[SlotDay(date=day, slots=day_slots) for day, day_slots in days.items()],
+    )

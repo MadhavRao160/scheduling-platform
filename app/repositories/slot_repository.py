@@ -119,3 +119,27 @@ async def block_available_for_inactive_event_types(
         .execution_options(synchronize_session=False)
     )
     await session.execute(stmt)
+
+async def find_available_for_event_type(
+    session: AsyncSession,
+    event_type_id: int,
+    range_start: datetime,
+    range_end: datetime,
+    now: datetime,
+) -> Sequence[Slot]:
+    """Bookable slots starting in [range_start, range_end), soonest first.
+
+    Matches the index (eventTypeId, startAt, status).
+    """
+    stmt = (
+        select(Slot)
+        .where(
+            Slot.event_type_id == event_type_id,
+            Slot.status == SlotStatus.AVAILABLE,
+            Slot.start_at > now,
+            Slot.start_at >= range_start,
+            Slot.start_at < range_end,
+        )
+        .order_by(Slot.start_at)
+    )
+    return (await session.execute(stmt)).scalars().all()
