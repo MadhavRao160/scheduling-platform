@@ -44,3 +44,12 @@ async def add(session: AsyncSession, rule: AvailabilityRule) -> AvailabilityRule
 async def delete(session: AsyncSession, rule: AvailabilityRule) -> None:
     await session.delete(rule)
     await session.flush()
+
+async def find_active_by_user(session: AsyncSession, user_id: int) -> Sequence[AvailabilityRule]:
+    """Active weekly rules for slot generation."""
+    stmt = (
+        select(AvailabilityRule)
+        .where(AvailabilityRule.user_id == user_id, AvailabilityRule.is_active.is_(True))
+        .order_by(AvailabilityRule.weekday, AvailabilityRule.start_time, AvailabilityRule.id)
+    )
+    return (await session.execute(stmt)).scalars().all()

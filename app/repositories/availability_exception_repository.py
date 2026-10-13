@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+import datetime
 from app.models.availability_exception import AvailabilityException
 
 
@@ -55,3 +55,18 @@ async def add(
 async def delete(session: AsyncSession, exception: AvailabilityException) -> None:
     await session.delete(exception)
     await session.flush()
+
+async def find_in_date_range(
+    session: AsyncSession, user_id: int, first_day: datetime.date, last_day: datetime.date
+) -> Sequence[AvailabilityException]:
+    """Exceptions whose date falls in [first_day, last_day], inclusive."""
+    stmt = (
+        select(AvailabilityException)
+        .where(
+            AvailabilityException.user_id == user_id,
+            AvailabilityException.date >= first_day,
+            AvailabilityException.date <= last_day,
+        )
+        .order_by(AvailabilityException.date, AvailabilityException.id)
+    )
+    return (await session.execute(stmt)).scalars().all()

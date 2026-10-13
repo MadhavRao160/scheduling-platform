@@ -86,3 +86,12 @@ async def get_active_with_host(
             EventType.is_active.is_(True),
         )
     )
+
+async def find_active_by_host(session: AsyncSession, host_id: int) -> Sequence[EventType]:
+    """Active event types for slot generation."""
+    stmt = (
+        select(EventType)
+        .where(EventType.host_id == host_id, EventType.is_active.is_(True))
+        .order_by(EventType.id)
+    )
+    return (await session.execute(stmt)).scalars().all()
