@@ -20,6 +20,7 @@ from app.errors import ApiError
 from app.schemas.common import ErrorResponse
 
 from sqlalchemy.exc import IntegrityError
+from app.api.routers import bookings
 from app.api.routers import availability, event_types, health, public_events, users
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(event_types.router)
     app.include_router(availability.router)
     app.include_router(public_events.router)
+    app.include_router(bookings.router)
 
     return app
 

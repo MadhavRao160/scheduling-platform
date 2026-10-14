@@ -143,3 +143,53 @@ async def find_available_for_event_type(
         .order_by(Slot.start_at)
     )
     return (await session.execute(stmt)).scalars().all()
+
+# ------------------------------------------------------------ booking writes
+
+
+async def get_for_update(session: AsyncSession, slot_id: str) -> Slot | None:
+    """PESSIMISTIC lock: SELECT ... FROM slots WHERE id = :id FOR UPDATE.
+
+    The row lock is held until this transaction commits or rolls back. Any
+    other transaction asking for the same row FOR UPDATE waits here.
+    populate_existing makes SQLAlchemy overwrite any copy of the row already
+    in the session, so we read the values as of the moment we got the lock.
+    """
+    stmt = (
+        select(Slot)
+        .where(Slot.id == slot_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_by_id(session: AsyncSession, slot_id: str) -> Slot | None:
+    return await session.get(Slot, slot_id)
+
+
+async def claim_if_available(
+    session: AsyncSession, slot_id: str, host_id: int, now: datetime
+) -> Row[tuple[str, int, datetime, datetime]] | None:
+    """OPTIMISTIC claim: one conditional UPDATE, no explicit lock.
+
+    UPDATE slots SET status = 'BOOKED'
+    WHERE id = :id AND "hostId" = :host AND status = 'AVAILABLE' AND "startAt" > :now
+    RETURNING id, "eventTypeId", "startAt", "endAt"
+
+    Returns the claimed slot's values, or None when no row matched (someone
+    else won, or the slot was never bookable).
+    """
+    stmt = (
+        update(Slot)
+        .where(
+            Slot.id == slot_id,
+            Slot.host_id == host_id,
+            Slot.status == SlotStatus.AVAILABLE,
+            Slot.start_at > now,
+        )
+        .values(status=SlotStatus.BOOKED, updated_at=func.now())
+        .returning(Slot.id, Slot.event_type_id, Slot.start_at, Slot.end_at)
+        .execution_options(synchronize_session=False)
+    )
+    return (await session.execute(stmt)).one_or_none()
