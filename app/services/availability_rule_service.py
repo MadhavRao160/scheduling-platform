@@ -17,6 +17,7 @@ from app.schemas.availability import (
     CreateAvailabilityRuleRequest,
     UpdateAvailabilityRuleRequest,
 )
+from app.temporal.client import start_regenerate_host_slots
 
 
 def _to_response(rule: AvailabilityRule) -> AvailabilityRuleResponse:
@@ -46,6 +47,7 @@ async def create_rule(
     rule = AvailabilityRule(user_id=user_id, **payload.model_dump())
     await availability_rule_repository.add(session, rule)
     await session.commit()
+    await start_regenerate_host_slots(user_id)
     return _to_response(rule)
 
 
@@ -81,6 +83,7 @@ async def update_rule(
 
     await availability_rule_repository.save(session, rule)
     await session.commit()
+    await start_regenerate_host_slots(user_id)
     return _to_response(rule)
 
 
@@ -88,3 +91,4 @@ async def delete_rule(session: AsyncSession, user_id: int, rule_id: int) -> None
     rule = await _load_or_404(session, user_id, rule_id)
     await availability_rule_repository.delete(session, rule)
     await session.commit()
+    await start_regenerate_host_slots(user_id)

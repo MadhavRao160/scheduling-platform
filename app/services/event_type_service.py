@@ -17,6 +17,7 @@ from app.schemas.event_type import (
     UpdateEventTypeRequest,
 )
 from app.utils.slug import slugify
+from app.temporal.client import start_regenerate_host_slots
 
 
 def _to_response(event_type: EventType) -> EventTypeResponse:
@@ -64,6 +65,7 @@ async def create_event_type(
     )
     await event_type_repository.add(session, event_type)
     await session.commit()
+    await start_regenerate_host_slots(host_id)
     return _to_response(event_type)
 
 
@@ -89,6 +91,7 @@ async def update_event_type(
 
     await event_type_repository.save(session, event_type)
     await session.commit()
+    await start_regenerate_host_slots(host_id)
     return _to_response(event_type)
 
 
@@ -98,6 +101,7 @@ async def delete_event_type(
     event_type = await _load_or_404(session, host_id, event_type_id)
     await event_type_repository.delete(session, event_type)
     await session.commit()
+    await start_regenerate_host_slots(host_id)
 
 async def get_public_event_type(
     session: AsyncSession, host_id: int, slug: str

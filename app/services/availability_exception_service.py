@@ -17,6 +17,7 @@ from app.schemas.availability import (
     UpdateAvailabilityExceptionRequest,
     exception_fields_adapter,
 )
+from app.temporal.client import start_regenerate_host_slots
 
 _COLUMNS = ("date", "type", "start_time", "end_time", "timezone", "reason")
 
@@ -64,6 +65,7 @@ async def create_exception(
     exception = AvailabilityException(user_id=user_id, **payload.model_dump())
     await availability_exception_repository.add(session, exception)
     await session.commit()
+    await start_regenerate_host_slots(user_id)
     return _to_response(exception)
 
 
@@ -100,6 +102,7 @@ async def update_exception(
 
     await availability_exception_repository.save(session, exception)
     await session.commit()
+    await start_regenerate_host_slots(user_id)
     return _to_response(exception)
 
 
@@ -109,3 +112,4 @@ async def delete_exception(
     exception = await _load_or_404(session, user_id, exception_id)
     await availability_exception_repository.delete(session, exception)
     await session.commit()
+    await start_regenerate_host_slots(user_id)
